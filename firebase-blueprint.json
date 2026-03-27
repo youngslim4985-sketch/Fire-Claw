@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "firecrawlApiKey": { "type": "string", "description": "User's personal Firecrawl API key" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Scrape": {
+      "title": "Scrape",
+      "description": "A single page scrape result",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "markdown": { "type": "string" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "url", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/scrapes/{scrapeId}": {
+      "schema": "Scrape",
+      "description": "Scrape results"
+    }
+  }
+}

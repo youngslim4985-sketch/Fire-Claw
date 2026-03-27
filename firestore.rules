@@ -1,0 +1,86 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required)
+//   - email: string (required, email format)
+//   - firecrawlApiKey: string (optional)
+//   - role: string (required, enum: ['admin', 'user'])
+//   - createdAt: timestamp (required)
+//
+// Collection: scrapes
+// Document ID: {scrapeId}
+// Fields:
+//   - userId: string (required)
+//   - url: string (required, uri format)
+//   - status: string (required, enum: ['pending', 'completed', 'failed'])
+//   - markdown: string (optional)
+//   - metadata: map (optional)
+//   - createdAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "youngslim4985@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string &&
+             (!('firecrawlApiKey' in data) || (data.firecrawlApiKey is string && data.firecrawlApiKey.size() < 200)) &&
+             (!('role' in data) || data.role in ['admin', 'user']);
+    }
+
+    function isValidScrape(data) {
+      return data.keys().hasAll(['userId', 'url', 'status']) &&
+             data.userId == request.auth.uid &&
+             data.url is string && data.url.size() < 2048 &&
+             data.status in ['pending', 'completed', 'failed'] &&
+             (!('markdown' in data) || (data.markdown is string && data.markdown.size() < 1048576)) &&
+             (!('metadata' in data) || data.metadata is map);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /scrapes/{scrapeId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidScrape(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidScrape(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+  }
+}

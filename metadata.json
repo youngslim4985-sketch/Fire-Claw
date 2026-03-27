@@ -1,0 +1,5 @@
+{
+  "name": "Firecrawl AI Data Engine",
+  "description": "Multi-tenant AI data ingestion platform using Firecrawl for web scraping, Firestore for storage, and Gemini for intelligence.",
+  "requestFramePermissions": []
+}
