@@ -75,7 +75,6 @@ interface FirestoreErrorInfo {
 interface UserProfile {
   uid: string;
   email: string;
-  firecrawlApiKey?: string;
   role: 'admin' | 'user';
   createdAt: any;
 }
@@ -252,35 +251,41 @@ export default function App() {
   };
 
   const handleScrape = async () => {
-    if (!targetUrl || !profile?.firecrawlApiKey) return;
+    if (!targetUrl || !user) return;
     setIsScraping(true);
     
     try {
       // 1. Create pending record
       const scrapeRef = await addDoc(collection(db, 'scrapes'), {
-        userId: user!.uid,
+        userId: user.uid,
         url: targetUrl,
         status: 'pending',
         createdAt: Timestamp.now()
       });
 
-      // 2. Call Firecrawl API
-      const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      // 2. Get Firebase ID Token
+      const idToken = await user.getIdToken();
+
+      // 3. Call Backend Proxy
+      const response = await fetch('/api/scrape', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${profile.firecrawlApiKey}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           url: targetUrl,
-          formats: ['markdown']
+          idToken: idToken
         })
       });
 
-      if (!response.ok) throw new Error('Firecrawl API error');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Scrape failed');
+      }
+      
       const result = await response.json();
 
-      // 3. Update record
+      // 4. Update record
       await setDoc(doc(db, 'scrapes', scrapeRef.id), {
         status: 'completed',
         markdown: result.data.markdown,
@@ -290,6 +295,7 @@ export default function App() {
       setTargetUrl('');
     } catch (error) {
       console.error('Scrape failed:', error);
+      alert(`Scrape failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsScraping(false);
     }
@@ -315,16 +321,6 @@ export default function App() {
       setAiInsight("Failed to generate AI insights.");
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  const updateApiKey = async (key: string) => {
-    if (!user) return;
-    try {
-      await setDoc(doc(db, 'users', user.uid), { firecrawlApiKey: key }, { merge: true });
-      setProfile(prev => prev ? { ...prev, firecrawlApiKey: key } : null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
     }
   };
 
@@ -431,16 +427,13 @@ export default function App() {
                           />
                           <button 
                             onClick={handleScrape}
-                            disabled={isScraping || !profile?.firecrawlApiKey}
+                            disabled={isScraping}
                             className="bg-[#141414] text-[#E4E3E0] px-8 py-3 font-mono text-xs uppercase tracking-widest disabled:opacity-30 flex items-center gap-2"
                           >
                             {isScraping ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
                             Execute Scrape
                           </button>
                         </div>
-                        {!profile?.firecrawlApiKey && (
-                          <p className="mt-4 font-mono text-[10px] text-red-600 uppercase">API Key Required. Visit Config to set up.</p>
-                        )}
                       </div>
                     </section>
 
@@ -605,29 +598,22 @@ export default function App() {
                   <div className="space-y-12">
                     <section className="bg-white border border-[#141414] p-8 shadow-[8px_8px_0px_0px_rgba(20,20,20,1)]">
                       <div className="flex items-center gap-3 mb-6">
-                        <Settings size={20} />
-                        <h3 className="font-serif italic text-2xl">Firecrawl API</h3>
+                        <ShieldCheck size={20} />
+                        <h3 className="font-serif italic text-2xl">Security Status</h3>
                       </div>
                       <p className="font-mono text-xs opacity-50 mb-6">
-                        Your API key is used to authenticate requests to the Firecrawl scraping engine.
+                        All API keys and secrets are managed server-side and are not exposed to the client.
                       </p>
-                      <div className="space-y-4">
-                        <p className="font-mono text-[10px] uppercase tracking-widest opacity-50">API Key</p>
-                        <input 
-                          type="password" 
-                          defaultValue={profile?.firecrawlApiKey || ''}
-                          onBlur={(e) => updateApiKey(e.target.value)}
-                          placeholder="fc-..."
-                          className="w-full bg-transparent border-b border-[#141414] py-2 font-mono text-sm focus:outline-none"
-                        />
-                        <p className="font-mono text-[10px] opacity-50">Changes are saved automatically on blur.</p>
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle2 size={16} />
+                        <span className="font-mono text-[10px] uppercase tracking-widest">Encrypted Tunnel Active</span>
                       </div>
                     </section>
 
                     <section className="bg-white border border-[#141414] p-8">
                       <div className="flex items-center gap-3 mb-6">
-                        <ShieldCheck size={20} />
-                        <h3 className="font-serif italic text-2xl">Account Security</h3>
+                        <Settings size={20} />
+                        <h3 className="font-serif italic text-2xl">Account Details</h3>
                       </div>
                       <div className="space-y-4">
                         <div className="flex justify-between items-center py-4 border-b border-[#141414] border-opacity-10">

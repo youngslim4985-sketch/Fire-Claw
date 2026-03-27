@@ -7,7 +7,6 @@
 // Fields:
 //   - uid: string (required)
 //   - email: string (required, email format)
-//   - firecrawlApiKey: string (optional)
 //   - role: string (required, enum: ['admin', 'user'])
 //   - createdAt: timestamp (required)
 //
@@ -53,7 +52,6 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'email']) &&
              data.uid is string &&
              data.email is string &&
-             (!('firecrawlApiKey' in data) || (data.firecrawlApiKey is string && data.firecrawlApiKey.size() < 200)) &&
              (!('role' in data) || data.role in ['admin', 'user']);
     }
 
